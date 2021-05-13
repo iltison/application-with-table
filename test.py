@@ -1,7 +1,12 @@
-from PyQt5 import QtWidgets, QtCore,QtGui
+from PyQt5.QtWidgets import QApplication, QTableView, QWidget, QGridLayout, QPushButton,QItemDelegate
+from PyQt5.QtGui import QStandardItemModel, QStandardItem
+from PyQt5 import QtWidgets
+from PyQt5 import QtCore
 import numpy as np
-from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QHBoxLayout, QPushButton, QLineEdit, QVBoxLayout, QMessageBox
-class Delegate(QtWidgets.QItemDelegate):
+import pyqtgraph as pg
+import h5py
+
+class Delegate(QItemDelegate):
     def __init__(self, owner, choices):
         super().__init__(owner)
         self.items = choices
@@ -58,45 +63,51 @@ class Model(QtCore.QAbstractTableModel):
         self.dataChanged.emit(index, index)
         return True
 
-class Main(QtWidgets.QMainWindow):
-    def __init__(self, parent=None):
-        QtWidgets.QWidget.__init__(self,parent)
-        # set combo box choices:
+class Table(QWidget):
+    def __init__(self,parent=None):
+        super().__init__()
+        self.setFixedSize(740, 700)
         choices = ['1', '2', '3','4','5']
-        # create table data:
         data1 = np.random.random(size=(5,5)).round(4)
         data2 = np.zeros((5,2))
         table = np.concatenate((data1, data2),axis = 1)
         table[:,1] = np.ones(5)
-        # create table view:
-        
+
         self.model = Model(table)
-
-        self.tableView = QtWidgets.QTableView()
-        self.tableView.setModel(self.model)
-        self.tableView.setItemDelegateForColumn(1, Delegate(self,choices))
-        self.tableView.setSizeAdjustPolicy(QtWidgets.QAbstractScrollArea.AdjustToContentsOnFirstShow)
-        self.tableView.horizontalHeader().setStretchLastSection(True )
-        
-        # make combo boxes editable with a single-click:
+        self.table = QTableView()
+        self.table.setModel(self.model)
+        self.table.setItemDelegateForColumn(1, Delegate(self,choices))
         for row in range(len(table)):
-            self.tableView.openPersistentEditor(self.model.index(row, 1))
-            #self.model.setData(self.model.index(row, 1), choices[0], QtCore.QVariant(self.model.index(row, 1)))
-        # initialize
+            self.table.openPersistentEditor(self.model.index(row, 1))
 
-        self.button = QPushButton("Push for Window",self)
-        self.button.resize(100,32)
-        self.button.move(50, 180) 
+        self.btnLoad = QPushButton("load")
+        self.btnLoad.clicked.connect(self.load_data)
 
-        self.setCentralWidget(self.tableView)
-        #self.setCentralWidget(self.button)
+        self.grid = QGridLayout(self)
+        self.grid.addWidget(self.table,0,0,5,5)
+        self.grid.addWidget(self.btnLoad,5,0,1,1)
         
-
-    def button_clicked():
-        print("Button 1 clicked")
-if __name__ == '__main__':
-    import sys
-    app = QtWidgets.QApplication(sys.argv)
-    main = Main()
-    main.show()
+        self.graphWidget = pg.PlotWidget()
+        self.grid.addWidget(self.graphWidget,2,0,3,5)
+        
+        self.btn_graph= QPushButton("Graph")
+        self.btn_graph.clicked.connect(self.draw_graph)
+        self.grid.addWidget(self.btn_graph,5,1,1,1)
+        
+    def draw_graph(self):
+        self.graphWidget.clear()
+        rows = [index.column() for index in self.table.selectedIndexes()]
+        rows = list(dict.fromkeys(rows))
+        x = self.model.table[:,rows[-1]]
+        y = self.model.table[:,rows[-2]]
+        self.graphWidget.plot(x, y)
+    
+    def save_file(self):
+        with h5py.File('file.h5', 'w') as hf:
+            hf.create_dataset("table_array",  data=self.model.table)
+        
+if __name__=="__main__":
+    app = QApplication([])
+    w = Table()
+    w.show()
     app.exec_()
