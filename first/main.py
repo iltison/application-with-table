@@ -1,6 +1,7 @@
 from PyQt5.QtWidgets import QApplication, QTableView, QWidget, QGridLayout, QPushButton,QItemDelegate
 from PyQt5 import QtWidgets
 from PyQt5 import QtCore
+from PyQt5 import QtGui 
 import numpy as np
 import pyqtgraph as pg
 import h5py
@@ -56,8 +57,8 @@ class Model(QtCore.QAbstractTableModel):
         self.selected_column_arg = 1
         self.selected_column_sum = 0
 
-        self.arg_column = 5
-        self.sum_column = 6
+        self.arg_column = 0
+        self.sum_column = 0
 
     def rowCount(self, parent):
         """
@@ -69,7 +70,19 @@ class Model(QtCore.QAbstractTableModel):
         """
         Получение количества столбцов таблицы
         """
-        return len(self.table[0])
+        cnt_columns = len(self.table[0])
+        self.arg_column = cnt_columns - 2
+        self.sum_column = cnt_columns - 1
+        return cnt_columns
+
+    def headerData(self, section, orientation, role=QtCore.Qt.DisplayRole):
+
+        if role == QtCore.Qt.DisplayRole and orientation == QtCore.Qt.Horizontal:
+            if section == self.sum_column:
+                return 'Сумма 1-ого столбца'
+            if section == self.arg_column:
+                return 'Квадрат 2-ого столбца'
+        return QtCore.QAbstractTableModel.headerData(self, section, orientation, role)
 
     def flags(self, index):
         """
@@ -96,11 +109,18 @@ class Model(QtCore.QAbstractTableModel):
         return:
             значение массивы соответствующее индексу поля
         """
+        column = index.column()
+        row = index.row()
+
+        if role == QtCore.Qt.BackgroundRole and index.column() == 0:
+            if self.table[row][column] >= 0:
+                return QtGui.QBrush(QtCore.Qt.green)
+            else:
+                return QtGui.QBrush(QtCore.Qt.red)
+
         if role == QtCore.Qt.DisplayRole or role == QtCore.Qt.EditRole:
-            column = index.column()
-            row = index.row()
             if column == self.arg_column:
-                self.table[row][column] = self.table[row,self.selected_column_arg]
+                self.table[row][column] = np.power(self.table[row,self.selected_column_arg],2)
                 return str(self.table[row][column])
 
             if column == self.sum_column:
@@ -142,7 +162,7 @@ class Ui_MainWindow(object):
     """
     def setupUi(self, MainWindow):
         
-        self.setFixedSize(740, 700)
+        self.setFixedSize(740, 800)
 
         self.grid = QGridLayout(self)
         self.table = QTableView()
@@ -150,18 +170,18 @@ class Ui_MainWindow(object):
         self.btn_graph= QPushButton("Graph")
         self.graphWidget = pg.PlotWidget()
 
-        self.grid.addWidget(self.table,0,0,5,5)
-        self.grid.addWidget(self.graphWidget,2,0,3,5)
-        self.grid.addWidget(self.btn_load,5,0,1,1)
-        self.grid.addWidget(self.btn_graph,5,1,1,1)
+        self.grid.addWidget(self.table,0,0,4,4)
+        self.grid.addWidget(self.graphWidget,4,0,2,4)
+        self.grid.addWidget(self.btn_load,6,0,1,2)
+        self.grid.addWidget(self.btn_graph,6,2,1,2)
 
 class main_window(Ui_MainWindow, QWidget):
     """
     Класс главного окна 
     """
-
     def __init__(self, parent=None):
-        """Инициализация GUI
+        """
+        Инициализация GUI
 
         args:
         self : Виджеты
@@ -170,6 +190,7 @@ class main_window(Ui_MainWindow, QWidget):
         self.setupUi(self)
         
         self.reading_file=False
+        self.filename = 'first/file.hdf5'
 
         table = self.load_data(self.reading_file)
         self.model = Model(table)
@@ -178,9 +199,18 @@ class main_window(Ui_MainWindow, QWidget):
         for row in range(len(table)):
             self.table.openPersistentEditor(self.model.index(row, 1))
         self.table.setSelectionBehavior(QTableView.SelectColumns)
-        self.table.setSelectionMode(QTableView.ContiguousSelection)
+        #self.table.setSelectionMode(QTableView.ContiguousSelection)
+
+        self.table.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOn)
+        self.table.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOn)
+
         self.btn_load.clicked.connect(self.save_file)
         self.btn_graph.clicked.connect(self.draw_graph)
+
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(self.model.arg_column, QtWidgets.QHeaderView.ResizeToContents) 
+        header.setSectionResizeMode(self.model.sum_column, QtWidgets.QHeaderView.ResizeToContents)        
+        
 
     def load_data(self, reading_from_file = True):
         """
@@ -192,12 +222,22 @@ class main_window(Ui_MainWindow, QWidget):
                                 False - создание нового массива
         """
         if reading_from_file:
-            with h5py.File('file.hdf5', 'r') as f:
+            with h5py.File(self.filename, 'r') as f:
                 dataset = f['table_array'][:]
                 return dataset
         else:
-            dataset = np.random.random(size=(5,7)).round(4)
+            dataset = np.random.randint(low=-10, high=10,size=(8,4))
             return dataset
+
+    def save_file(self):
+        """
+        Функция сохранения массива
+
+        args:
+            self : main_window object
+        """
+        with h5py.File(self.filename, 'w') as hf:
+            hf.create_dataset("table_array",  data=self.model.table)
 
     def draw_graph(self):
         """
@@ -215,17 +255,10 @@ class main_window(Ui_MainWindow, QWidget):
             self.graphWidget.plot(x, y)
 
         except:
-            raise Exception('select 2 columns') 
+            pass
+            #raise Exception('select 2 columns') 
     
-    def save_file(self):
-        """
-        Функция сохранения массива
-
-        args:
-            self : main_window object
-        """
-        with h5py.File('file.hdf5', 'w') as hf:
-            hf.create_dataset("table_array",  data=self.model.table)
+    
         
 if __name__=="__main__":
     app = QApplication([])
