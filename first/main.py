@@ -230,9 +230,7 @@ class main_window(Ui_MainWindow, QWidget):
         self.table.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOn)
         header = self.table.horizontalHeader()
         for column in range(table_data.shape[1]):
-            header.setSectionResizeMode(column, QtWidgets.QHeaderView.ResizeToContents)
-        #header.setSectionResizeMode(self.model.arg_column, QtWidgets.QHeaderView.ResizeToContents) 
-        #header.setSectionResizeMode(self.model.sum_column, QtWidgets.QHeaderView.ResizeToContents)  
+            header.setSectionResizeMode(column, QtWidgets.QHeaderView.ResizeToContents) 
 
     def preload_data(self):
         """
@@ -302,7 +300,6 @@ class main_window(Ui_MainWindow, QWidget):
         filename = self.saveFileDialog()
         self.save_dataset_file(filename=filename)
         
-
     def graph_button_handler(self):
         """
         Обработчик кнопки создания графика
